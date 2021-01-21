@@ -1,4 +1,4 @@
-var oFileIn, tree, diagonal, svg, root;
+var oFileIn, tree, diagonal, svg, root, line, treeData, numLeaves;
 var i = 0,
     duration = 750,
     nodeDepth = 3;
@@ -7,6 +7,10 @@ document.addEventListener("DOMContentLoaded", function() {
     oFileIn = document.getElementById('file_input');
     if (oFileIn.addEventListener) {
         oFileIn.addEventListener('change', filePicked, false);
+    }
+    render = document.getElementById('submit');
+    if (render.addEventListener) {
+        render.addEventListener('click', () => { generateTree(treeData, numLeaves) }, false);
     }
 });
 
@@ -22,13 +26,12 @@ function filePicked(oEvent) {
         // Parse CSV string
         var result = Papa.parse(e.target.result);
 
-        console.log(result);
-
-        var treeData = [{
+        treeData = [{
             "name": "Root",
             "parent": "null",
             "children": [],
         }];
+        numLeaves = result.data.length;
 
         result.data.forEach((row, idx) => {
             if (idx === 0 || row.length == 1) {
@@ -40,7 +43,7 @@ function filePicked(oEvent) {
             insertTree(treeData[0], 0, rowData);
         });
 
-        generateTree(treeData, result.data.length);
+        generateTree(treeData, numLeaves);
     };
 
     // Tell JS To Start Reading The File.. You could delay this if desired
@@ -57,7 +60,6 @@ function insertTree(root, depth, rowData) {
     if (node) {
         insertTree(node, depth + 1, rowData);
     } else {
-        console.log(root.children);
         node = { name: currentName, parent: root.name, children: [] };
         root.children.push(node);
         insertTree(node, depth + 1, rowData);
@@ -83,6 +85,10 @@ function generateTree(treeData, numLeaves) {
     diagonal = d3.svg.diagonal()
         .projection(function(d) { return [d.y, d.x]; });
 
+    line = d3.svg.line()
+        .x(function(d) { return d.lx; })
+        .y(function(d) { return d.ly; });
+
     svg = d3.select("#output").append("svg")
         .attr("width", width + margin.right + margin.left)
         .attr("height", height + margin.top + margin.bottom)
@@ -99,6 +105,8 @@ function generateTree(treeData, numLeaves) {
 }
 
 function update(source) {
+    var useStraightLine = document.getElementById("straightLine").checked;
+
     // Compute the new tree layout.
     var nodes = tree.nodes(root).reverse(),
         links = tree.links(nodes);
@@ -109,6 +117,80 @@ function update(source) {
     // Update the nodes…
     var node = svg.selectAll("g.node")
         .data(nodes, function(d) { return d.id || (d.id = ++i); });
+
+
+    // Enter any new links at the parent's previous position.
+    if (useStraightLine) {
+        // Update the links…
+        var link = svg.selectAll("line")
+            .data(links, function(d) { return d.target.id; });
+
+        link.enter().append("line")
+            .attr("class", "link")
+            .attr("x1", function(d) { return d.source.y0; })
+            .attr("y1", function(d) { return d.source.x0; })
+            .attr("x2", function(d) { return d.target.y0; })
+            .attr("y2", function(d) { return d.target.x0; });
+
+        // Transition links to their new position.
+        link.transition()
+            .duration(duration)
+            .attr("x1", function(d) {
+                return d.source.y;
+            })
+            .attr("y1", function(d) {
+                return d.source.x;
+            })
+            .attr("x2", function(d) {
+                return d.target.y;
+            })
+            .attr("y2", function(d) {
+                return d.target.x;
+            });
+
+        // Transition exiting nodes to the parent's new position.
+        link.exit().transition()
+            .duration(duration)
+            .attr("x1", function(d) {
+                return d.source.y;
+            })
+            .attr("y1", function(d) {
+                return d.source.x;
+            })
+            .attr("x2", function(d) {
+                return d.target.y;
+            })
+            .attr("y2", function(d) {
+                return d.target.x;
+            })
+            .remove();
+    } else {
+        // Update the links…
+        var link = svg.selectAll("path.link")
+            .data(links, function(d) { return d.target.id; });
+
+        link.enter().insert("path", "g")
+            .attr("class", "link")
+            .attr("d",
+                function(d) {
+                    var o = { x: source.x0, y: source.y0 };
+                    return diagonal({ source: o, target: o });
+                });
+
+        // Transition links to their new position.
+        link.transition()
+            .duration(duration)
+            .attr("d", diagonal);
+
+        // Transition exiting nodes to the parent's new position.
+        link.exit().transition()
+            .duration(duration)
+            .attr("d", function(d) {
+                var o = { x: source.x, y: source.y };
+                return diagonal({ source: o, target: o });
+            })
+            .remove();
+    }
 
     // Enter any new nodes at the parent's previous position.
     var nodeEnter = node.enter().append("g")
@@ -150,32 +232,6 @@ function update(source) {
 
     nodeExit.select("text")
         .style("fill-opacity", 1e-6);
-
-    // Update the links…
-    var link = svg.selectAll("path.link")
-        .data(links, function(d) { return d.target.id; });
-
-    // Enter any new links at the parent's previous position.
-    link.enter().insert("path", "g")
-        .attr("class", "link")
-        .attr("d", function(d) {
-            var o = { x: source.x0, y: source.y0 };
-            return diagonal({ source: o, target: o });
-        });
-
-    // Transition links to their new position.
-    link.transition()
-        .duration(duration)
-        .attr("d", diagonal);
-
-    // Transition exiting nodes to the parent's new position.
-    link.exit().transition()
-        .duration(duration)
-        .attr("d", function(d) {
-            var o = { x: source.x, y: source.y };
-            return diagonal({ source: o, target: o });
-        })
-        .remove();
 
     // Stash the old positions for transition.
     nodes.forEach(function(d) {
