@@ -113,6 +113,7 @@ function getNodeXOffset(treeHeight) {
 
 function update(source) {
     var useStraightLine = document.getElementById("straightLine").checked;
+    var hideRootNode = document.getElementById("hideRootNode").checked;
     // Compute the new tree layout.
     var nodes = tree.nodes(root).reverse(),
         links = tree.links(nodes);
@@ -135,7 +136,13 @@ function update(source) {
             .attr("x1", function(d) { return d.source.y0; })
             .attr("y1", function(d) { return d.source.x0; })
             .attr("x2", function(d) { return d.target.y0; })
-            .attr("y2", function(d) { return d.target.x0; });
+            .attr("y2", function(d) { return d.target.x0; })
+            .style("opacity", function(d, i) {
+                if (hideRootNode) {
+                    return !d.source.depth ? 0 : 1;
+                }
+                return 1;
+            });
 
         // Transition links to their new position.
         link.transition()
@@ -180,7 +187,13 @@ function update(source) {
                 function(d) {
                     var o = { x: source.x0, y: source.y0 };
                     return diagonal({ source: o, target: o });
-                });
+                })
+            .style("opacity", function(d, i) {
+                if (hideRootNode) {
+                    return !d.source.depth ? 0 : 1;
+                }
+                return 1;
+            });
 
         // Transition links to their new position.
         link.transition()
@@ -201,7 +214,16 @@ function update(source) {
     var nodeEnter = node.enter().append("g")
         .attr("class", "node")
         .attr("transform", function(d) { return "translate(" + source.y0 + "," + source.x0 + ")"; })
-        .on("click", click);
+        .on("click", click)
+        .style("opacity", function(d, i) {
+            if (hideRootNode) {
+                return !d.depth ? 0 : 1;
+            }
+            return 1;
+        })
+        .style("pointer-events", function(d, i) {
+            return !d.depth ? "none" : "all";
+        });
 
     // var circleFillFunc = function(d) {
     //     if (d._children) {

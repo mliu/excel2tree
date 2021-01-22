@@ -16,4 +16,5 @@
     fill: none;
     stroke: #ccc;
     stroke-width: 2px;
+    z-index: -1;
 }
