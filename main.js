@@ -203,12 +203,19 @@ function update(source) {
         .attr("transform", function(d) { return "translate(" + source.y0 + "," + source.x0 + ")"; })
         .on("click", click);
 
+    // var circleFillFunc = function(d) {
+    //     if (d._children) {
+    //         return "hsl(190, 35%, 50%)";
+    //     } else {
+    //         alphaValue = Math.max(Math.round(100 - d.childrenCount / numNodes * 200), 45);
+    //         return "hsl(190, 35%, " + alphaValue + "%)";
+    //     }
+    // };
     var circleFillFunc = function(d) {
         if (d._children) {
-            return "hsl(190, 35%, 50%)";
+            return "lightsteelblue";
         } else {
-            alphaValue = Math.max(Math.round(100 - d.childrenCount / numNodes * 200), 45);
-            return "hsl(190, 35%, " + alphaValue + "%)";
+            return "#fff";
         }
     };
 
@@ -216,13 +223,13 @@ function update(source) {
         .attr("r", circleRadius)
         .style("fill", circleFillFunc);
 
-    nodeEnter.append("text")
-        .attr("text-anchor", "middle")
-        .attr("dy", ".35em")
-        .text(function(d) {
-            return Math.round(d.childrenCount / numNodes * 100) + "%"
-        })
-        .style("fill-opacity", 1e-6);
+    // nodeEnter.append("text")
+    //     .attr("text-anchor", "middle")
+    //     .attr("dy", ".35em")
+    //     .text(function(d) {
+    //         return Math.round(d.childrenCount / numNodes * 100) + "%"
+    //     })
+    //     .style("fill-opacity", 1e-6);
 
     nodeEnter.append("text")
         .attr("x", function(d) { return d.children || d._children ? -circleRadius - 5 : circleRadius + 5; })
