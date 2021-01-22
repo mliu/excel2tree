@@ -1,16 +1,17 @@
-var oFileIn, tree, diagonal, svg, root, line, treeData, numLeaves;
+var tree, diagonal, svg, root, line, treeData, numNodes, csvData;
 var i = 0,
     duration = 750,
-    nodeDepth = 3;
+    treeHeight = 3,
+    circleRadius = 15;
 
 document.addEventListener("DOMContentLoaded", function() {
-    oFileIn = document.getElementById('file_input');
+    var oFileIn = document.getElementById('fileInput');
     if (oFileIn.addEventListener) {
         oFileIn.addEventListener('change', filePicked, false);
     }
-    render = document.getElementById('submit');
+    var render = document.getElementById('submit');
     if (render.addEventListener) {
-        render.addEventListener('click', () => { generateTree(treeData, numLeaves) }, false);
+        render.addEventListener('click', () => { generateTree(csvData) }, false);
     }
 });
 
@@ -24,26 +25,8 @@ function filePicked(oEvent) {
     // Ready The Event For When A File Gets Selected
     reader.onload = function(e) {
         // Parse CSV string
-        var result = Papa.parse(e.target.result);
-
-        treeData = [{
-            "name": "Root",
-            "parent": "null",
-            "children": [],
-        }];
-        numLeaves = result.data.length;
-
-        result.data.forEach((row, idx) => {
-            if (idx === 0 || row.length == 1) {
-                return;
-            }
-
-            // Insert the node into the tree
-            var rowData = extractRowData(row);
-            insertTree(treeData[0], 0, rowData);
-        });
-
-        generateTree(treeData, numLeaves);
+        csvData = Papa.parse(e.target.result);
+        generateTree(csvData);
     };
 
     // Tell JS To Start Reading The File.. You could delay this if desired
@@ -51,33 +34,53 @@ function filePicked(oEvent) {
 }
 
 function insertTree(root, depth, rowData) {
-    if (depth >= nodeDepth) {
+    if (depth >= treeHeight) {
         return;
     }
 
     var currentName = rowData[depth];
     var node = root.children.find(el => el.name == currentName);
     if (node) {
+        node.childrenCount++;
         insertTree(node, depth + 1, rowData);
     } else {
-        node = { name: currentName, parent: root.name, children: [] };
+        node = { name: currentName, parent: root.name, children: [], childrenCount: 0 };
         root.children.push(node);
         insertTree(node, depth + 1, rowData);
     }
 }
 
 function extractRowData(row) {
-    return row.slice(1, nodeDepth + 1);
+    return row.slice(1, treeHeight + 1);
 }
 
-function generateTree(treeData, numLeaves) {
+function generateTree(csvData) {
+    treeHeight = document.getElementById('treeHeight').value;
+    numNodes = csvData.data.length;
+    treeData = [{
+        "name": "Root",
+        "parent": "null",
+        "children": [],
+        "childrenCount": numNodes,
+    }];
+
+    csvData.data.forEach((row, idx) => {
+        if (idx === 0 || row.length == 1) {
+            return;
+        }
+
+        // Insert the node into the tree
+        var rowData = extractRowData(row);
+        insertTree(treeData[0], 0, rowData);
+    });
+
     // Cleanup previous tree (if any)
     var output = document.getElementById("output");
     output.innerHTML = '';
 
     var margin = { top: 50, right: 120, bottom: 20, left: 120 },
-        width = window.innerWidth - margin.right - margin.left,
-        height = numLeaves * 22 - margin.top - margin.bottom;
+        width = getNodeXOffset(treeHeight) + margin.right + margin.left,
+        height = numNodes * (circleRadius * 2) - margin.top - margin.bottom;
 
     tree = d3.layout.tree()
         .size([height, width]);
@@ -104,20 +107,22 @@ function generateTree(treeData, numLeaves) {
     d3.select(self.frameElement).style("height", "500px");
 }
 
+function getNodeXOffset(treeHeight) {
+    return treeHeight * 180 + (treeHeight * treeHeight * 30);
+}
+
 function update(source) {
     var useStraightLine = document.getElementById("straightLine").checked;
-
     // Compute the new tree layout.
     var nodes = tree.nodes(root).reverse(),
         links = tree.links(nodes);
 
     // Normalize for fixed-depth.
-    nodes.forEach(function(d) { d.y = d.depth * 180; });
+    nodes.forEach(function(d) { d.y = getNodeXOffset(d.depth); });
 
     // Update the nodes…
     var node = svg.selectAll("g.node")
         .data(nodes, function(d) { return d.id || (d.id = ++i); });
-
 
     // Enter any new links at the parent's previous position.
     if (useStraightLine) {
@@ -198,12 +203,29 @@ function update(source) {
         .attr("transform", function(d) { return "translate(" + source.y0 + "," + source.x0 + ")"; })
         .on("click", click);
 
+    var circleFillFunc = function(d) {
+        if (d._children) {
+            return "hsl(190, 35%, 50%)";
+        } else {
+            alphaValue = Math.max(Math.round(100 - d.childrenCount / numNodes * 200), 45);
+            return "hsl(190, 35%, " + alphaValue + "%)";
+        }
+    };
+
     nodeEnter.append("circle")
-        .attr("r", 1e-6)
-        .style("fill", function(d) { return d._children ? "lightsteelblue" : "#fff"; });
+        .attr("r", circleRadius)
+        .style("fill", circleFillFunc);
 
     nodeEnter.append("text")
-        .attr("x", function(d) { return d.children || d._children ? -13 : 13; })
+        .attr("text-anchor", "middle")
+        .attr("dy", ".35em")
+        .text(function(d) {
+            return Math.round(d.childrenCount / numNodes * 100) + "%"
+        })
+        .style("fill-opacity", 1e-6);
+
+    nodeEnter.append("text")
+        .attr("x", function(d) { return d.children || d._children ? -circleRadius - 5 : circleRadius + 5; })
         .attr("dy", ".35em")
         .attr("text-anchor", function(d) { return d.children || d._children ? "end" : "start"; })
         .text(function(d) { return d.name; })
@@ -215,10 +237,10 @@ function update(source) {
         .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
 
     nodeUpdate.select("circle")
-        .attr("r", 10)
-        .style("fill", function(d) { return d._children ? "lightsteelblue" : "#fff"; });
+        .attr("r", circleRadius)
+        .style("fill", circleFillFunc);
 
-    nodeUpdate.select("text")
+    nodeUpdate.selectAll("text")
         .style("fill-opacity", 1);
 
     // Transition exiting nodes to the parent's new position.
@@ -228,9 +250,9 @@ function update(source) {
         .remove();
 
     nodeExit.select("circle")
-        .attr("r", 1e-6);
+        .attr("r", circleRadius);
 
-    nodeExit.select("text")
+    nodeExit.selectAll("text")
         .style("fill-opacity", 1e-6);
 
     // Stash the old positions for transition.
